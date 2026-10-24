@@ -1,0 +1,6 @@
+{
+  "text": "<|speaker:0|>[warm, calm, reassuring] We should leave before dawn. The guards change at six, and the eastern wall is quietest then.<|speaker:1|>[gruff, doubtful, low voice] The city is sealed, and it is a two-day walk to the pass. If they catch us, there is no trial for smugglers.",
+  "reference_id": ["c70cfb98867a4bfb9ae20d2401257b92", "bf322df2096a46f18c579d0baa36f41d"],
+  "format": "mp3",
+  "prosody": { "speed": 1.0, "volume": 0, "normalize_loudness": true }
+}

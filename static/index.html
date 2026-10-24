@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoiceMorph AI — Same dialogue. New voice.</title>
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    (function () {
+      var t = localStorage.getItem("vm-theme");
+      if (!t) t = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/">VoiceMorph <span>AI</span></a>
+      <div class="topbar-right">
+        <span id="chip-health" class="status"><span class="dot"></span>checking…</span>
+        <button id="theme-toggle" class="icon-btn" title="Toggle dark / light" aria-label="Toggle theme">◐</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="warn-banner" class="banner warn hidden"></div>
+
+    <!-- intro -->
+    <section class="intro">
+      <h1>Re-cast a voice, keep every word.</h1>
+      <p>Upload a short clip. VoiceMorph transcribes the dialogue, re-performs it with a Drama&nbsp;3 voice you choose, and syncs it back onto your untouched video.</p>
+    </section>
+
+    <!-- 1 · upload -->
+    <section class="card" id="sec-upload">
+      <div class="card-head">
+        <span class="n">1</span>
+        <div>
+          <h2>Upload</h2>
+          <p class="sub">Video or audio · up to <span class="js-limit-mb">100 MB</span> / <span class="js-limit-dur">300 s</span> · everything local except the transcript text.</p>
+        </div>
+      </div>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload a clip">
+        <input type="file" id="file-input" accept="audio/*,video/*" hidden />
+        <p class="dz-title">Drop a clip or <u>browse</u></p>
+        <p class="dz-exts">MP4 · MOV · WEBM · MKV · MP3 · WAV · M4A · AAC · FLAC · OGG</p>
+      </div>
+      <div id="upload-progress" class="hidden">
+        <div class="meter"><div class="meter-fill" id="meter-fill"></div></div>
+        <p class="meter-label" id="meter-label">Uploading…</p>
+      </div>
+      <div id="media-preview" class="media-preview hidden">
+        <video id="preview-video" class="preview-el" controls playsinline></video>
+        <audio id="preview-audio" class="preview-el" controls></audio>
+        <div class="meta-row">
+          <span class="tag" id="meta-kind">—</span>
+          <span class="tag muted" id="meta-name">—</span>
+          <button class="btn ghost sm" id="btn-clear-upload">Replace file</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 · transcript -->
+    <section class="card hidden" id="sec-analyze">
+      <div class="card-head">
+        <span class="n">2</span>
+        <div>
+          <h2>Transcript</h2>
+          <p class="sub">Check what the model heard. These exact words are what the new voice will perform — edit before transforming.</p>
+        </div>
+      </div>
+      <div class="stepper" id="analyze-steps"></div>
+      <div id="transcript-error" class="banner error hidden"></div>
+      <div id="transcript-panel" class="hidden">
+        <div class="meta-row" id="analysis-meta"></div>
+        <div id="speaker-map" class="hidden"></div>
+        <textarea id="transcript" spellcheck="false" rows="4" placeholder="…"></textarea>
+        <p class="hint">Bracketed text (e.g. <code>[whisper]</code>, <code><|speaker:0|></code>) is a direction or speaker tag — Drama&nbsp;3 doesn't speak it, it uses it to act. Change the words; leave tags alone.</p>
+      </div>
+    </section>
+
+    <!-- 3 · voice -->
+    <section class="card hidden" id="sec-voice">
+      <div class="card-head">
+        <span class="n">3</span>
+        <div>
+          <h2>Voice</h2>
+          <p class="sub">Authorized Drama&nbsp;3 profiles. Press ▶ for a live sample, then choose how many takes to compare.</p>
+        </div>
+      </div>
+      <div class="voice-grid" id="voice-grid"></div>
+
+      <div class="options">
+        <label class="opt">
+          <span>Takes</span>
+          <select id="opt-takes">
+            <option value="1">1 take</option>
+            <option value="2">2 takes</option>
+            <option value="3">3 takes</option>
+          </select>
+        </label>
+        <label class="opt">
+          <span>Speed <b id="speed-val">1.00×</b></span>
+          <input type="range" id="opt-speed" min="0.8" max="1.25" step="0.05" value="1" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" id="btn-transform" disabled>Transform voice</button>
+        <p class="hint" id="transform-hint">Waiting for analysis…</p>
+      </div>
+    </section>
+
+    <!-- 4 · result -->
+    <section class="card hidden" id="sec-result">
+      <div class="card-head">
+        <span class="n">4</span>
+        <div>
+          <h2>Result</h2>
+          <p class="sub" id="result-sub">Voice generation, sync, and the word-by-word verification.</p>
+        </div>
+      </div>
+      <div class="stepper" id="transform-steps"></div>
+      <div id="transform-error" class="banner error hidden"></div>
+
+      <div id="result-panel" class="hidden">
+        <div id="takes-row" class="hidden">
+          <p class="row-label">Takes — click to preview · export any take</p>
+          <div class="takes" id="takes"></div>
+        </div>
+
+        <div class="compare-grid" id="compare-grid">
+          <div class="compare-col">
+            <p class="row-label">Before</p>
+            <canvas class="wave" id="wave-before" height="56"></canvas>
+            <audio id="audio-before" controls class="audio-sm"></audio>
+          </div>
+          <div class="compare-col">
+            <p class="row-label">After · <span id="after-voice">transformed</span></p>
+            <canvas class="wave" id="wave-after" height="56"></canvas>
+            <audio id="audio-after" controls class="audio-sm"></audio>
+          </div>
+        </div>
+
+        <div class="result-meta" id="result-meta"></div>
+        <p class="hint">Timing is fitted to the original clip (speech onset aligned to the original mouth movement, then padded/trimmed to the exact length). Lip movements come from your untouched video — pixel-perfect lipsync of a re-performed voice would need face re-animation, which this tool deliberately doesn't do.</p>
+
+        <video id="output-video" class="output-video hidden" controls playsinline></video>
+        <audio id="output-audio" class="audio-sm hidden" controls></audio>
+
+        <div class="compare-grid tc grid2" id="tc-grid">
+          <div class="compare-col">
+            <p class="row-label">Source transcript</p>
+            <p class="tc-text" id="tc-before">—</p>
+          </div>
+          <div class="compare-col">
+            <p class="row-label">Generated <span id="tc-match-note" class="match-note"></span></p>
+            <p class="tc-text" id="tc-after">—</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <a class="btn primary" id="btn-download" download>⬇ Final clip</a>
+          <a class="btn ghost" id="btn-download-audio" download>Audio only</a>
+          <button class="btn ghost" id="btn-retry">Another voice</button>
+          <button class="btn ghost" id="btn-reset">New clip</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- history -->
+    <section class="card hidden" id="sec-history">
+      <div class="card-head">
+        <span class="n">•</span>
+        <div>
+          <h2>Recent jobs</h2>
+          <p class="sub">Kept while the server runs. Click to reopen a result.</p>
+        </div>
+      </div>
+      <div id="history-list" class="history"></div>
+    </section>
+
+    <footer class="foot">
+      VoiceMorph AI · FastAPI + vanilla JS + FFmpeg · speech by <a href="https://fish.audio" target="_blank" rel="noreferrer">Fish Audio Drama&nbsp;3</a>.
+      Authorized synthetic/public voices only — no cloning of real actors without consent.
+    </footer>
+  </main>
+
+  <div id="toast-root"></div>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
